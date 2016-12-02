@@ -101,6 +101,7 @@ class Processor(object):
     def on_task(self, task, response):
         '''Deal one task'''
         start_time = time.time()
+        # 应该是复制一个response吧
         response = rebuild_response(response)
 
         try:

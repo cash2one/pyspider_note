@@ -36,6 +36,7 @@ from .cookie_utils import extract_cookies_to_jar
 logger = logging.getLogger('fetcher')
 
 
+# 统一两个接口
 class MyCurlAsyncHTTPClient(CurlAsyncHTTPClient):
 
     def free_size(self):
@@ -117,6 +118,7 @@ class Fetcher(object):
         if self.async:
             return self.async_fetch(task, callback)
         else:
+            # 咋有result()?
             return self.async_fetch(task, callback).result()
 
     @gen.coroutine
@@ -368,7 +370,6 @@ class Fetcher(object):
         while True:
             # robots.txt
             if task_fetch.get('robots_txt', False):
-                # yield 一个 robots.txt的response
                 can_fetch = yield self.can_fetch(fetch['headers']['User-Agent'], fetch['url'])
                 if not can_fetch:
                     error = tornado.httpclient.HTTPError(403, 'Disallowed by robots.txt')
@@ -390,6 +391,7 @@ class Fetcher(object):
                 raise gen.Return(handle_error(e))
 
             try:
+                # gen.maybe_future 返回一个 将self.http_client.fetch(request)转换成Future
                 response = yield gen.maybe_future(self.http_client.fetch(request))
             except tornado.httpclient.HTTPError as e:
                 if e.response:
@@ -397,7 +399,11 @@ class Fetcher(object):
                 else:
                     raise gen.Return(handle_error(e))
 
+
+            # requests 里面的知识
             extract_cookies_to_jar(session, response.request, response.headers)
+
+            # 处理重定向
             if (response.code in (301, 302, 303, 307)
                     and response.headers.get('Location')
                     and task_fetch.get('allow_redirects', True)):
@@ -411,12 +417,17 @@ class Fetcher(object):
                     if 'body' in fetch:
                         del fetch['body']
                 fetch['url'] = quote_chinese(urljoin(fetch['url'], response.headers['Location']))
+
+                # 计算超时时间
                 fetch['request_timeout'] -= time.time() - start_time
                 if fetch['request_timeout'] < 0:
                     fetch['request_timeout'] = 0.1
                 max_redirects -= 1
+
+                # 如果是重定向，接下来不处理了
                 continue
 
+            # 返回结果
             result = {}
             result['orig_url'] = url
             result['content'] = response.body or ''
@@ -635,10 +646,15 @@ class Fetcher(object):
                 return
             while not self._quit:
                 try:
+                    # 输出queue满
                     if self.outqueue.full():
                         break
+
+                    # 无空闲连接
                     if self.http_client.free_size() <= 0:
                         break
+
+                    # 非阻塞的get
                     task = self.inqueue.get_nowait()
                     # FIXME: decode unicode_obj should used after data selete from
                     # database, it's used here for performance
@@ -719,9 +735,12 @@ class Fetcher(object):
         status_code = result.get('status_code', 599)
         if status_code != 599:
             status_code = (int(status_code) / 100 * 100)
+
+        # 计数
         self._cnt['5m'].event((task.get('project'), status_code), +1)
         self._cnt['1h'].event((task.get('project'), status_code), +1)
 
+        # 计速
         if type in ('http', 'phantomjs') and result.get('time'):
             content_len = len(result.get('content', ''))
             self._cnt['5m'].event((task.get('project'), 'speed'),

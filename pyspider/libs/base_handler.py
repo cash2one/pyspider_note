@@ -260,13 +260,19 @@ class BaseHandler(object):
 
         assert len(url) < 1024, "Maximum (1024) URL length error."
 
+        # callback的处理
         if kwargs.get('callback'):
             callback = kwargs['callback']
+
+            # 如果callback是字符串
             if isinstance(callback, six.string_types) and hasattr(self, callback):
                 func = getattr(self, callback)
+
+            # 如果callback是可调用的
             elif six.callable(callback) and six.get_method_self(callback) is self:
                 func = callback
                 kwargs['callback'] = func.__name__
+
             else:
                 raise NotImplementedError("self.%s() not implemented!" % callback)
             if hasattr(func, '_config'):
@@ -378,14 +384,18 @@ class BaseHandler(object):
           full documents: http://pyspider.readthedocs.org/en/latest/apis/self.crawl/
         '''
 
+        # curl 形式的
         if isinstance(url, six.string_types) and url.startswith('curl '):
             curl_kwargs = curl_to_arguments(url)
             url = curl_kwargs.pop('urls')
             for k, v in iteritems(curl_kwargs):
                 kwargs.setdefault(k, v)
 
+        # normal url
         if isinstance(url, six.string_types):
             return self._crawl(url, **kwargs)
+
+        # 可iter的url
         elif hasattr(url, "__iter__"):
             result = []
             for each in url:

@@ -100,16 +100,19 @@ def cli(ctx, **kwargs):
     for db in ('taskdb', 'projectdb', 'resultdb'):
         if kwargs[db] is not None:
             continue
+
         if os.environ.get('MYSQL_NAME'):
             kwargs[db] = utils.Get(lambda db=db: connect_database(
                 'sqlalchemy+mysql+%s://%s:%s/%s' % (
                     db, os.environ['MYSQL_PORT_3306_TCP_ADDR'],
                     os.environ['MYSQL_PORT_3306_TCP_PORT'], db)))
+
         elif os.environ.get('MONGODB_NAME'):
             kwargs[db] = utils.Get(lambda db=db: connect_database(
                 'mongodb+%s://%s:%s/%s' % (
                     db, os.environ['MONGODB_PORT_27017_TCP_ADDR'],
                     os.environ['MONGODB_PORT_27017_TCP_PORT'], db)))
+
         elif ctx.invoked_subcommand == 'bench':
             if kwargs['data_path'] == './data':
                 kwargs['data_path'] += '/bench'
@@ -120,6 +123,8 @@ def cli(ctx, **kwargs):
             else:
                 kwargs[db] = utils.Get(lambda db=db: connect_database('sqlite+%s:///%s/%s.db' % (
                     db, kwargs['data_path'], db[:-2])))
+
+        # 没指定数据库的话，默认sqlite
         else:
             if not os.path.exists(kwargs['data_path']):
                 os.mkdir(kwargs['data_path'])
@@ -128,17 +133,22 @@ def cli(ctx, **kwargs):
             kwargs['is_%s_default' % db] = True
 
     # create folder for counter.dump
+    # counter.dump？计数的？
     if not os.path.exists(kwargs['data_path']):
         os.mkdir(kwargs['data_path'])
 
     # message queue, compatible with old version
+    # 默认没有消息队列
     if kwargs.get('message_queue'):
         pass
+
     elif kwargs.get('amqp_url'):
         kwargs['message_queue'] = kwargs['amqp_url']
+
     elif os.environ.get('RABBITMQ_NAME'):
         kwargs['message_queue'] = ("amqp://guest:guest@%(RABBITMQ_PORT_5672_TCP_ADDR)s"
                                    ":%(RABBITMQ_PORT_5672_TCP_PORT)s/%%2F" % os.environ)
+
     elif kwargs.get('beanstalk'):
         kwargs['message_queue'] = "beanstalk://%s/" % kwargs['beanstalk']
 

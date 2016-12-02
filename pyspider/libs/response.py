@@ -66,20 +66,22 @@ class Response(object):
         if hasattr(self, '_encoding'):
             return self._encoding
 
-        # content is unicode
+        # content是unicode的
         if isinstance(self.content, six.text_type):
             return 'unicode'
 
-        # Try charset from content-type or content
+        # 试着从header或content中取得编码
         encoding = get_encoding(self.headers, self.content)
 
-        # Fallback to auto-detected encoding.
+        # 使用chardet去检测
         if not encoding and chardet is not None:
             encoding = chardet.detect(self.content[:600])['encoding']
 
+        # gb2312的处理
         if encoding and encoding.lower() == 'gb2312':
             encoding = 'gb18030'
 
+        # 如果encoding为空，取utf-8
         self._encoding = encoding or 'utf-8'
         return self._encoding
 
@@ -88,6 +90,9 @@ class Response(object):
         """
         set encoding of content manually
         it will overwrite the guessed encoding
+        """
+        """
+        手动设置编码
         """
         self._encoding = value
         self._text = None
@@ -100,10 +105,17 @@ class Response(object):
         if Response.encoding is None and chardet module is available, encoding
         will be guessed.
         """
+        """
+        unicode的response的content
+        """
+
         if hasattr(self, '_text') and self._text:
             return self._text
+        # 没content的
         if not self.content:
             return u''
+
+        # 如果是unicode的话
         if isinstance(self.content, six.text_type):
             return self.content
 
@@ -111,6 +123,7 @@ class Response(object):
         encoding = self.encoding
 
         # Decode unicode from given encoding.
+        # 开始解码
         try:
             content = self.content.decode(encoding, 'replace')
         except LookupError:
@@ -141,6 +154,7 @@ class Response(object):
             return self._doc
         elements = self.etree
         doc = self._doc = PyQuery(elements)
+        # 让所有连接变成绝对的
         doc.make_links_absolute(utils.text(self.url))
         return doc
 
@@ -208,25 +222,33 @@ def rebuild_response(r):
 
 def get_encoding(headers, content):
     """Get encoding from request headers or page head."""
+    """从request的headers和page头取得编码信息"""
     encoding = None
 
     content_type = headers.get('content-type')
     if content_type:
+        # NOTE:cgi.parse_header 用于分析
         _, params = cgi.parse_header(content_type)
         if 'charset' in params:
             encoding = params['charset'].strip("'\"")
 
     if not encoding:
+        # 确保content是unicode的
         content = utils.pretty_unicode(content[:1000]) if six.PY3 else content
 
+        # 利用正则在内容的头部提取
         charset_re = re.compile(r'<meta.*?charset=["\']*(.+?)["\'>]',
                                 flags=re.I)
         pragma_re = re.compile(r'<meta.*?content=["\']*;?charset=(.+?)["\'>]',
                                flags=re.I)
         xml_re = re.compile(r'^<\?xml.*?encoding=["\']*(.+?)["\'>]')
+
+
         encoding = (charset_re.findall(content) +
                     pragma_re.findall(content) +
                     xml_re.findall(content))
+
+        # encoding=encoding[0] if encoding else None
         encoding = encoding and encoding[0] or None
 
     return encoding

@@ -17,18 +17,19 @@ import threading
 import six
 from six import iteritems
 
+# MD5函数
 md5string = lambda x: hashlib.md5(utf8(x)).hexdigest()
 
 
 class ReadOnlyDict(dict):
-    """A Read Only Dict"""
+    """一个只读字典"""
 
     def __setitem__(self, key, value):
         raise Exception("dict is read-only")
 
 
 def getitem(obj, key=0, default=None):
-    """Get first element of list or return default"""
+    """get or return default"""
     try:
         return obj[key]
     except:
@@ -232,11 +233,13 @@ def pretty_unicode(string):
     """
     Make sure string is unicode, try to decode with utf8, or unicode escaped string if failed.
     """
+    """确保string是unicode的，试图decode成utf8"""
     if isinstance(string, six.text_type):
         return string
     try:
         return string.decode("utf8")
     except UnicodeDecodeError:
+        # 注意这里的方法
         return string.decode('Latin-1').encode('unicode_escape').decode("utf8")
 
 
@@ -298,6 +301,7 @@ def decode_unicode_string(string):
     """
     Decode string encoded by `unicode_string`
     """
+    # 这是干嘛？处理BASE64？
     if string.startswith('[BASE64-DATA]') and string.endswith('[/BASE64-DATA]'):
         return base64.b64decode(string[len('[BASE64-DATA]'):-len('[/BASE64-DATA]')])
     return string
@@ -324,6 +328,10 @@ class Get(object):
     """
     Lazy value calculate for object
     """
+
+    # 如
+    # mq = utils.Get(lambda name=name: connect_message_queue(name, kwargs.get('message_queue'), kwargs['queue_maxsize']))
+    # 下一次调用mq()即可连接，说白了，也就是个particle
 
     def __init__(self, getter):
         self.getter = getter
