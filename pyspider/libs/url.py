@@ -21,6 +21,7 @@ def get_content_type(filename):
 _encode_params = RequestEncodingMixin._encode_params
 
 
+# requests的multipart form
 def _encode_multipart_formdata(fields, files):
     body, content_type = RequestEncodingMixin._encode_files(files, fields)
     return content_type, body
@@ -31,10 +32,12 @@ def _build_url(url, _params):
 
     # Support for unicode domain names and paths.
     scheme, netloc, path, params, query, fragment = urlparse(url)
+    # encode 的这个是什么东东
     netloc = netloc.encode('idna').decode('utf-8')
     if not path:
         path = '/'
 
+    # PY2转换成unicode
     if six.PY2:
         if isinstance(scheme, six.text_type):
             scheme = scheme.encode('utf-8')
@@ -49,20 +52,26 @@ def _build_url(url, _params):
         if isinstance(fragment, six.text_type):
             fragment = fragment.encode('utf-8')
 
+    # 调用requests的_encode_params
     enc_params = _encode_params(_params)
     if enc_params:
         if query:
+            # 在后面append
             query = '%s&%s' % (query, enc_params)
         else:
             query = enc_params
+    # urllib里面的拼url函数
     url = (urlunparse([scheme, netloc, path, params, query, fragment]))
     return url
 
 
 def quote_chinese(url, encodeing="utf-8"):
     """Quote non-ascii characters"""
+
+    # 将unicode encode成utf-8
     if isinstance(url, six.text_type):
         return quote_chinese(url.encode(encodeing))
+
     if six.PY3:
         res = [six.int2byte(b).decode('latin-1') if b < 128 else '%%%02X' % b for b in url]
     else:

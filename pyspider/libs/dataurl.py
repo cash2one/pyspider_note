@@ -12,9 +12,7 @@ from six.moves.urllib.parse import quote, unquote
 
 
 def encode(data, mime_type='', charset='utf-8', base64=True):
-    """
-    Encode data to DataURL
-    """
+
     if isinstance(data, six.text_type):
         data = data.encode(charset)
     else:

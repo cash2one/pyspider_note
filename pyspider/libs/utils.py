@@ -207,6 +207,7 @@ def utf8(string):
 
     If parameter is a object, object.__str__ will been called before encode as bytes
     """
+    """确保string是utf-8，将其转换成unicode"""
     if isinstance(string, six.text_type):
         return string.encode('utf8')
     elif isinstance(string, six.binary_type):
@@ -221,6 +222,8 @@ def text(string, encoding='utf8'):
 
     If parameter is a object, object.__str__ will been called
     """
+    """确保string是unicode的，试图decode"""
+
     if isinstance(string, six.text_type):
         return string
     elif isinstance(string, six.binary_type):
@@ -356,6 +359,7 @@ class ObjectDict(dict):
 
 def load_object(name):
     """Load object from module"""
+    """加载module"""
 
     if "." not in name:
         raise Exception('load object need module.object')

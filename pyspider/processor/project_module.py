@@ -195,14 +195,19 @@ class ProjectLoader(object):
         self.mod = mod
 
     def load_module(self, fullname):
+        # 动态加载模块
         if self.mod is None:
+            # new_module： Return a new empty module object called fullname. This object is not inserted in sys.modules.
             self.mod = mod = imp.new_module(fullname)
         else:
             mod = self.mod
+
+        # 初始化
         mod.__file__ = '<%s>' % self.name
         mod.__loader__ = self
         mod.__project__ = self.project
         mod.__package__ = ''
+
         code = self.get_code(fullname)
         six.exec_(code, mod.__dict__)
         linecache.clearcache()
@@ -212,6 +217,28 @@ class ProjectLoader(object):
         return False
 
     def get_code(self, fullname):
+        # 将source编译为代码或者AST对象。代码对象能够通过exec语句来执行或者eval()进行求值。
+        # compile(source, filename, mode[, flags[, dont_inherit]])
+
+        """
+        >>> code = "for i in range(0, 10): print i"
+        >>> cmpcode = compile(code, '', 'exec')
+        >>> exec cmpcode
+        0
+        1
+        2
+        3
+        4
+        5
+        6
+        7
+        8
+        9
+        >>> str = "3 * 4 + 5"
+        >>> a = compile(str,'','eval')
+        >>> eval(a)
+        17
+        """
         return compile(self.get_source(fullname), '<%s>' % self.name, 'exec')
 
     def get_source(self, fullname):

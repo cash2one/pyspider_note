@@ -184,6 +184,7 @@ class BaseHandler(object):
         exception = None
         stdout = sys.stdout
         self.task = task
+        # deep copy response
         if isinstance(response, dict):
             response = rebuild_response(response)
         self.response = response
@@ -218,10 +219,12 @@ class BaseHandler(object):
         return ProcessorResult(result, follows, messages, logs, exception, extinfo, save)
 
     schedule_fields = ('priority', 'retries', 'exetime', 'age', 'itag', 'force_update', 'auto_recrawl', 'cancel')
+
     fetch_fields = ('method', 'headers', 'data', 'connect_timeout', 'timeout', 'allow_redirects', 'cookies',
                     'proxy', 'etag', 'last_modifed', 'last_modified', 'save', 'js_run_at', 'js_script',
                     'js_viewport_width', 'js_viewport_height', 'load_images', 'fetch_type', 'use_gzip', 'validate_cert',
                     'max_redirects', 'robots_txt')
+
     process_fields = ('callback', 'process_time_limit')
 
     @staticmethod
@@ -272,30 +275,39 @@ class BaseHandler(object):
             elif six.callable(callback) and six.get_method_self(callback) is self:
                 func = callback
                 kwargs['callback'] = func.__name__
-
             else:
                 raise NotImplementedError("self.%s() not implemented!" % callback)
+
+            # callback的config处理
             if hasattr(func, '_config'):
+                # iteritems： This replaces dictionary.iteritems() on Python 2 and dictionary.items() on Python 3.
                 for k, v in iteritems(func._config):
                     if isinstance(v, dict) and isinstance(kwargs.get(k), dict):
                         kwargs[k].update(v)
                     else:
                         kwargs.setdefault(k, v)
-
+        # url的处理
         url = quote_chinese(_build_url(url.strip(), kwargs.pop('params', None)))
+
+        # data的处理
         if kwargs.get('files'):
             assert isinstance(
                 kwargs.get('data', {}), dict), "data must be a dict when using with files!"
+
+            # requests的multipart form
             content_type, data = _encode_multipart_formdata(kwargs.pop('data', {}),
                                                             kwargs.pop('files', {}))
+            # 我觉得setdefault的名字应该改成getdafault :)
             kwargs.setdefault('headers', {})
             kwargs['headers']['Content-Type'] = content_type
             kwargs['data'] = data
+
         if kwargs.get('data'):
             kwargs['data'] = _encode_params(kwargs['data'])
         if kwargs.get('data'):
             kwargs.setdefault('method', 'POST')
 
+        # -------------不懂----------------
         schedule = {}
         for key in self.schedule_fields:
             if key in kwargs:
@@ -316,6 +328,9 @@ class BaseHandler(object):
             if key in kwargs:
                 process[key] = kwargs.pop(key)
         task['process'] = process
+
+
+        # -----------------end 不懂----------------------
 
         task['project'] = self.project_name
         task['url'] = url
