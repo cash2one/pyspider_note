@@ -203,11 +203,11 @@ except ImportError as e:
 
 def utf8(string):
     """
+    确保string是utf-8，将其转换成unicode
     Make sure string is utf8 encoded bytes.
 
     If parameter is a object, object.__str__ will been called before encode as bytes
     """
-    """确保string是utf-8，将其转换成unicode"""
     if isinstance(string, six.text_type):
         return string.encode('utf8')
     elif isinstance(string, six.binary_type):

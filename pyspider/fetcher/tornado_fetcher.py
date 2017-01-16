@@ -33,12 +33,12 @@ from tornado.simple_httpclient import SimpleAsyncHTTPClient
 from pyspider.libs import utils, dataurl, counter
 from pyspider.libs.url import quote_chinese
 from .cookie_utils import extract_cookies_to_jar
+
 logger = logging.getLogger('fetcher')
 
 
 # 统一两个接口
 class MyCurlAsyncHTTPClient(CurlAsyncHTTPClient):
-
     def free_size(self):
         return len(self._free_list)
 
@@ -47,12 +47,12 @@ class MyCurlAsyncHTTPClient(CurlAsyncHTTPClient):
 
 
 class MySimpleAsyncHTTPClient(SimpleAsyncHTTPClient):
-
     def free_size(self):
         return self.max_clients - self.size()
 
     def size(self):
         return len(self.active)
+
 
 fetcher_output = {
     "status_code": int,
@@ -77,28 +77,30 @@ class Fetcher(object):
     phantomjs_proxy = None
     splash_endpoint = None
     splash_lua_source = open(os.path.join(os.path.dirname(__file__), "splash_fetcher.lua")).read()
-    robot_txt_age = 60*60  # 1h
+    robot_txt_age = 60 * 60  # 1h
 
     def __init__(self, inqueue, outqueue, poolsize=100, proxy=None, async=True):
-        self.inqueue = inqueue
-        self.outqueue = outqueue
+        self.inqueue = inqueue  # 入队列
+        self.outqueue = outqueue  # 出队列
 
-        self.poolsize = poolsize
+        self.poolsize = poolsize  # 并发数
         self._running = False
         self._quit = False
         self.proxy = proxy
-        self.async = async
-        self.ioloop = tornado.ioloop.IOLoop()
+        self.async = async  # 异步
+        self.ioloop = tornado.ioloop.IOLoop()  # IOLoop
 
         self.robots_txt_cache = {}
 
         # binding io_loop to http_client here
         if self.async:
+            # tornado CurlAsyncHTTPClient object
             self.http_client = MyCurlAsyncHTTPClient(max_clients=self.poolsize,
                                                      io_loop=self.ioloop)
         else:
             self.http_client = tornado.httpclient.HTTPClient(MyCurlAsyncHTTPClient, max_clients=self.poolsize)
 
+        # 统计计数
         self._cnt = {
             '5m': counter.CounterManager(
                 lambda: counter.TimebaseAverageWindowCounter(30, 10)),
@@ -108,6 +110,7 @@ class Fetcher(object):
 
     def send_result(self, type, task, result):
         '''Send fetch result to processor'''
+        """发送task到self.outqueue"""
         if self.outqueue:
             try:
                 self.outqueue.put((task, result))
@@ -118,11 +121,16 @@ class Fetcher(object):
         if self.async:
             return self.async_fetch(task, callback)
         else:
-            # 咋有result()?
             return self.async_fetch(task, callback).result()
 
     @gen.coroutine
     def async_fetch(self, task, callback=None):
+        """
+
+        :param task:
+        :param callback:
+        :yield: result         dict
+        """
         '''Do one fetch'''
         url = task.get('url', 'data:,')
         if callback is None:
@@ -131,14 +139,14 @@ class Fetcher(object):
         type = 'None'
         start_time = time.time()
         try:
-            # 根据task的fetch来实现不同的爬取
+            # 根据task的fetch yield 不同的result,如fetch="phantomjs"
             if url.startswith('data:'):
                 type = 'data'
                 result = yield gen.maybe_future(self.data_fetch(url, task))
             elif task.get('fetch', {}).get('fetch_type') in ('js', 'phantomjs'):
                 type = 'phantomjs'
                 result = yield self.phantomjs_fetch(url, task)
-            elif task.get('fetch', {}).get('fetch_type') in ('splash', ):
+            elif task.get('fetch', {}).get('fetch_type') in ('splash',):
                 type = 'splash'
                 result = yield self.splash_fetch(url, task)
             else:
@@ -341,6 +349,7 @@ class Fetcher(object):
         handle_error = lambda x: self.handle_error('http', url, task, start_time, x)
 
         # fetch就是一个dict。
+        # 把task解包成tornado认识的形式
         fetch = self.pack_tornado_request_parameters(url, task)
         task_fetch = task.get('fetch', {})
 
@@ -348,8 +357,9 @@ class Fetcher(object):
         session = cookies.RequestsCookieJar()
 
         # fix for tornado request obj
-        # 从headers里面读取“set-cookies”
+        # 从headers里面读取“set-cookies”,设置到session里面，然后删除fetch里面的cookies
         if 'Cookie' in fetch['headers']:
+            # PY2: Cookies  PY3: http.cookies
             c = http_cookies.SimpleCookie()
             try:
                 c.load(fetch['headers']['Cookie'])
@@ -367,6 +377,7 @@ class Fetcher(object):
         fetch['follow_redirects'] = False
 
         # making requests
+        # 处理一个task,这个循环会一直处理重定向
         while True:
             # robots.txt
             if task_fetch.get('robots_txt', False):
@@ -375,12 +386,18 @@ class Fetcher(object):
                     error = tornado.httpclient.HTTPError(403, 'Disallowed by robots.txt')
                     raise gen.Return(handle_error(error))
 
+            # 处理cookies
             try:
+                # 制造一个tornado的request
                 request = tornado.httpclient.HTTPRequest(**fetch)
                 # if cookie already in header, get_cookie_header wouldn't work
+
+                # 获取request header的cookies(之前set的cookies)
                 old_cookie_header = request.headers.get('Cookie')
                 if old_cookie_header:
                     del request.headers['Cookie']
+
+                # 添加至session(cookiesjar)
                 cookie_header = cookies.get_cookie_header(session, request)
                 if cookie_header:
                     request.headers['Cookie'] = cookie_header
@@ -390,6 +407,7 @@ class Fetcher(object):
                 logger.exception(fetch)
                 raise gen.Return(handle_error(e))
 
+            # 正式fetch部分
             try:
                 # gen.maybe_future 返回一个 将self.http_client.fetch(request)转换成Future
                 response = yield gen.maybe_future(self.http_client.fetch(request))
@@ -399,14 +417,14 @@ class Fetcher(object):
                 else:
                     raise gen.Return(handle_error(e))
 
-
-            # requests 里面的知识
+            # requests 里面的知识.把response与request的cookies放入cookiejar里面
             extract_cookies_to_jar(session, response.request, response.headers)
 
             # 处理重定向
             if (response.code in (301, 302, 303, 307)
-                    and response.headers.get('Location')
-                    and task_fetch.get('allow_redirects', True)):
+                # 只能处理在headers里面的重定向
+                and response.headers.get('Location')
+                and task_fetch.get('allow_redirects', True)):
                 if max_redirects <= 0:
                     error = tornado.httpclient.HTTPError(
                         599, 'Maximum (%d) redirects followed' % task_fetch.get('max_redirects', 5),
@@ -709,10 +727,12 @@ class Fetcher(object):
             result = self.sync_fetch(task)
             result = Binary(umsgpack.packb(result))
             return result
+
         application.register_function(sync_fetch, 'fetch')
 
         def dump_counter(_time, _type):
             return self._cnt[_time].to_dict(_type)
+
         application.register_function(dump_counter, 'counter')
 
         import tornado.wsgi
