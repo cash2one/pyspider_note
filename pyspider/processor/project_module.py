@@ -25,8 +25,8 @@ class ProjectManager(object):
     load projects from projectdb, update project
     """
 
-    CHECK_PROJECTS_INTERVAL = 5 * 60
-    RELOAD_PROJECT_INTERVAL = 60 * 60
+    CHECK_PROJECTS_INTERVAL = 5 * 60            # 检查project的时间间隔
+    RELOAD_PROJECT_INTERVAL = 60 * 60           # 重载project的时间间隔
 
     @staticmethod
     def build_module(project, env={}):
@@ -51,6 +51,8 @@ class ProjectManager(object):
         # logger inject
         module.log_buffer = []
         module.logging = module.logger = logging.Logger(project['name'])
+
+        # 允许标准输出
         if env.get('enable_stdout_capture', True):
             handler = SaveLogHandler(module.log_buffer)
             handler.setFormatter(LogFormatter(color=False))
@@ -92,13 +94,19 @@ class ProjectManager(object):
         self.last_check_projects = time.time()
 
     def _need_update(self, project_name, updatetime=None, md5sum=None):
-        '''Check if project_name need update'''
+        '''
+        检查project是否需要update
+        Check if project_name need update
+        '''
         if project_name not in self.projects:
             return True
+        # 每个project都根据其脚本内容有一个md5
         elif md5sum and md5sum != self.projects[project_name]['info'].get('md5sum'):
             return True
+        # 大于rpoject的updatetime大于给定的updatetime
         elif updatetime and updatetime > self.projects[project_name]['info'].get('updatetime', 0):
             return True
+        # 大于RELOAD_PROJECT_INTERVAL
         elif time.time() - self.projects[project_name]['load_time'] > self.RELOAD_PROJECT_INTERVAL:
             return True
         return False
@@ -209,7 +217,9 @@ class ProjectLoader(object):
         mod.__package__ = ''
 
         code = self.get_code(fullname)
+        # six.exec_(code, globals=None, locals=None)
         six.exec_(code, mod.__dict__)
+        # 检查缓存的有效性。如果在缓存中的文件在硬盘上发生了变化，并且你需要更新版本，使用这个函数。如果省略filename，将检查缓存里的所有条目。
         linecache.clearcache()
         return mod
 

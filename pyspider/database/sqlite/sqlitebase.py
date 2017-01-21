@@ -43,6 +43,7 @@ class SplitTableMixin(object):
         self._projects = value
 
     def _list_project(self):
+        """从数据库中读取project到self.project中"""
         self._last_update_projects = time.time()
         self.projects = set()
         if self.__tablename__:
@@ -56,6 +57,7 @@ class SplitTableMixin(object):
                 self.projects.add(project)
 
     def drop(self, project):
+        """从数据库中删除project"""
         if project not in self.projects:
             self._list_project()
         if project not in self.projects:

@@ -33,6 +33,7 @@ class BaseDB:
         raise NotImplementedError
 
     def _execute(self, sql_query, values=[]):
+        """取得dbcur并执行SQL"""
         dbcur = self.dbcur
         dbcur.execute(sql_query, values)
         return dbcur
@@ -95,6 +96,8 @@ class BaseDB:
 
     def _insert(self, tablename=None, **values):
         tablename = self.escape(tablename or self.__tablename__)
+
+        # 构建SQL
         if values:
             _keys = ", ".join((self.escape(k) for k in values))
             _values = ", ".join([self.placeholder, ] * len(values))
@@ -103,7 +106,9 @@ class BaseDB:
             sql_query = "INSERT INTO %s DEFAULT VALUES" % tablename
         logger.debug("<sql: %s>", sql_query)
 
+        # 执行SQL
         if values:
+            # itervalues: This replaces dictionary.itervalues() on Python 2 and dictionary.values() on Python 3
             dbcur = self._execute(sql_query, list(itervalues(values)))
         else:
             dbcur = self._execute(sql_query)
