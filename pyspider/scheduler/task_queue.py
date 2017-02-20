@@ -21,6 +21,7 @@ logger = logging.getLogger('scheduler')
 try:
     cmp
 except NameError:
+    # a>b=-1
     cmp = lambda x, y: (x > y) - (x < y)
 
 
@@ -39,8 +40,10 @@ class InQueueTask(DictMixin):
 
     def __cmp__(self, other):
         if self.exetime == 0 and other.exetime == 0:
+            # a>b=1，小的变大，大的变小
             return -cmp(self.priority, other.priority)
         else:
+            # a>b=-1
             return cmp(self.exetime, other.exetime)
 
     def __lt__(self, other):
@@ -63,9 +66,11 @@ class PriorityTaskQueue(Queue.Queue):
         return len(self.queue_dict)
 
     def _put(self, item, heappush=heapq.heappush):
+        # 如果已经存在
         if item.taskid in self.queue_dict:
             task = self.queue_dict[item.taskid]
             changed = False
+            # 更改优先级与执行时间
             if item.priority > task.priority:
                 task.priority = item.priority
                 changed = True
@@ -75,11 +80,13 @@ class PriorityTaskQueue(Queue.Queue):
             if changed:
                 self._resort()
         else:
+            # 堆排序，注意，item是可比较的obj(也就是定义了__lt__)
             heappush(self.queue, item)
             self.queue_dict[item.taskid] = item
 
     def _get(self, heappop=heapq.heappop):
         while self.queue:
+            # 最小的出堆
             item = heappop(self.queue)
             if item.taskid is None:
                 continue
@@ -89,6 +96,7 @@ class PriorityTaskQueue(Queue.Queue):
 
     @property
     def top(self):
+        # 返回队列第一个元素,非pop
         while self.queue and self.queue[0].taskid is None:
             heapq.heappop(self.queue)
         if self.queue:
@@ -96,6 +104,7 @@ class PriorityTaskQueue(Queue.Queue):
         return None
 
     def _resort(self):
+        # 最小堆化
         heapq.heapify(self.queue)
 
     def __contains__(self, taskid):
@@ -121,8 +130,12 @@ class TaskQueue(object):
 
     def __init__(self, rate=0, burst=0):
         self.mutex = threading.RLock()
+        # 队列中放入的是InQueueTask
+        # 时间到了，就绪队列
         self.priority_queue = PriorityTaskQueue()
+        # 时间不到，等待中的队列
         self.time_queue = PriorityTaskQueue()
+        # 正在处理中的队列？
         self.processing = PriorityTaskQueue()
         self.bucket = Bucket(rate=rate, burst=burst)
 
@@ -152,6 +165,7 @@ class TaskQueue(object):
         self._check_processing()
 
     def _check_time_queue(self):
+        """从等待队列中取出到exetime时间的task，放入等待队列中"""
         now = time.time()
         self.mutex.acquire()
         while self.time_queue.qsize() and self.time_queue.top and self.time_queue.top.exetime < now:
@@ -161,6 +175,7 @@ class TaskQueue(object):
         self.mutex.release()
 
     def _check_processing(self):
+        """从处理队列中拿出到exetime时间的task，放入就绪队列中"""
         now = time.time()
         self.mutex.acquire()
         while self.processing.qsize() and self.processing.top and self.processing.top.exetime < now:
@@ -194,6 +209,7 @@ class TaskQueue(object):
 
     def get(self):
         '''Get a task from queue when bucket available'''
+        # 从就绪的优先队列中取出，放入处理队列中
         if self.bucket.get() < 1:
             return None
         now = time.time()
@@ -204,6 +220,7 @@ class TaskQueue(object):
         except Queue.Empty:
             self.mutex.release()
             return None
+        # TODO 为什么要设置等待时间
         task.exetime = now + self.processing_timeout
         self.processing.put(task)
         self.mutex.release()
@@ -220,6 +237,7 @@ class TaskQueue(object):
         return False
 
     def delete(self, taskid):
+        # __contains__
         if taskid not in self:
             return False
         if taskid in self.priority_queue:
