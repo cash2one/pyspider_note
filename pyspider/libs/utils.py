@@ -177,10 +177,13 @@ try:
                 self.seconds = 0
             if self.seconds:
                 signal.signal(signal.SIGALRM, self.handle_timeout)
+                # math.ceil:浮点数向上取整
+                # 超时会执行handle_timeout
                 signal.alarm(int(math.ceil(self.seconds)))
 
         def __exit__(self, type, value, traceback):
             if self.seconds:
+                # 0,永不执行
                 signal.alarm(0)
 
 except ImportError as e:

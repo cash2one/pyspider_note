@@ -112,6 +112,7 @@ class BaseHandlerMeta(type):
         for each in attrs.values():
             if inspect.isfunction(each) and getattr(each, 'is_cronjob', False):
                 cron_jobs.append(each)
+                # 找到两个数的最大公约数
                 min_tick = fractions.gcd(min_tick, each.tick)
         newcls = type.__new__(cls, name, bases, attrs)
         newcls._cron_jobs = cron_jobs
@@ -144,31 +145,46 @@ class BaseHandler(object):
 
     def _run_func(self, function, *arguments):
         """
-        Running callback function with requested number of arguments
+        执行回调函数
+        Running callback function with requested number of argumentsq
         """
+
+        # A named tuple ArgSpec(args, varargs, keywords, defaults) is returned.
+        # args is a list of the parameter names.
+        # varargs and keywords are the names of the * and ** parameters or None.
+        # defaults is a tuple of default argument values or None if there are no default arguments
+
+        # Deprecated since version 3.0: Use getfullargspec() for an updated API that is usually a drop-in replacement,
+        # but also correctly handles function annotations and keyword-only parameters.
         args, varargs, keywords, defaults = inspect.getargspec(function)
         task = arguments[-1]
         process_time_limit = task['process'].get('process_time_limit',
                                                  self.__env__.get('process_time_limit', 0))
         if process_time_limit > 0:
+            # 有超时的process
             with timeout(process_time_limit, 'process timeout'):
                 ret = function(*arguments[:len(args) - 1])
         else:
+            # 执行函数
             ret = function(*arguments[:len(args) - 1])
         return ret
 
     def _run_task(self, task, response):
         """
+        执行task['callback']．抛出错误，如果出错的话
         Finding callback specified by `task['callback']`
         raising status error for it if needed.
         """
+        # task['process']['callback']
         process = task.get('process', {})
         callback = process.get('callback', '__call__')
+        # 如果方法没有实现
         if not hasattr(self, callback):
             raise NotImplementedError("self.%s() not implemented!" % callback)
 
         function = getattr(self, callback)
         # do not run_func when 304
+        # 经过catch_status_code_error装饰器的函数，会有_catch_status_code_error这个属性
         if response.status_code == 304 and not getattr(function, '_catch_status_code_error', False):
             return None
         if not getattr(function, '_catch_status_code_error', False):
@@ -177,8 +193,10 @@ class BaseHandler(object):
 
     def run_task(self, module, task, response):
         """
+        处理task，捕捉错误，返回ProcessorResult object
         Processing the task, catching exceptions and logs, return a `ProcessorResult` object
         """
+        # TODO module是啥
         self.logger = logger = module.logger
         result = None
         exception = None
@@ -192,14 +210,19 @@ class BaseHandler(object):
 
         try:
             if self.__env__.get('enable_stdout_capture', True):
+                # 一个具有writelines等方法的基于list的obj
                 sys.stdout = ListO(module.log_buffer)
             self._reset()
+            # 运行task
             result = self._run_task(task, response)
+            # TODO
+            # on_result　用于处理结果
             if inspect.isgenerator(result):
                 for r in result:
                     self._run_func(self.on_result, r, response, task)
             else:
                 self._run_func(self.on_result, result, response, task)
+
         except Exception as e:
             logger.exception(e)
             exception = e
@@ -215,6 +238,7 @@ class BaseHandler(object):
             self.response = None
             self.save = None
 
+        # 清空buffer
         module.log_buffer[:] = []
         return ProcessorResult(result, follows, messages, logs, exception, extinfo, save)
 
@@ -229,6 +253,7 @@ class BaseHandler(object):
 
     @staticmethod
     def task_join_crawl_config(task, crawl_config):
+        """将crawl_config转成task"""
         task_fetch = task.get('fetch', {})
         for k in BaseHandler.fetch_fields:
             if k in crawl_config:
@@ -342,6 +367,7 @@ class BaseHandler(object):
         if kwargs:
             raise TypeError('crawl() got unexpected keyword argument: %s' % kwargs.keys())
 
+        # TODO　这个调试器我不知道是什么东西
         if self.is_debugger():
             task = self.task_join_crawl_config(task, self.crawl_config)
             if task['fetch'].get('proxy', False) and task['fetch'].get('fetch_type', None) in ('js', 'phantomjs') \
@@ -418,7 +444,7 @@ class BaseHandler(object):
             return result
 
     def is_debugger(self):
-        """Return true if running in debugger"""
+        """Return true if running in debugger(调试器模式)"""
         return self.__env__.get('debugger')
 
     def send_message(self, project, msg, url='data:,on_message'):
@@ -453,6 +479,7 @@ class BaseHandler(object):
 
     @not_send_status
     def _on_cronjob(self, response, task):
+        # TODO
         if (not response.save
                 or not isinstance(response.save, dict)
                 or 'tick' not in response.save):

@@ -32,6 +32,8 @@ class Project(object):
         '''
         self.scheduler = scheduler
 
+        # 双向队列
+        # _, task
         self.active_tasks = deque(maxlen=scheduler.ACTIVE_TASKS)
         self.task_queue = TaskQueue()
         self.task_loaded = False
@@ -55,8 +57,11 @@ class Project(object):
         #                             paused <--(last UNPAUSE_CHECK_NUM task no success)--|
         if not self._paused:
             fail_cnt = 0
+            # 遍历所有活动的task，找到一个task['track']['process']['ok']的
             for _, task in self.active_tasks:
                 # ignore select task
+
+                # 忽略task包
                 if task.get('type') == self.scheduler.TASK_PACK:
                     continue
                 if 'process' not in task['track']:
@@ -67,6 +72,8 @@ class Project(object):
                     fail_cnt += 1
                 if fail_cnt >= self.scheduler.FAIL_PAUSE_NUM:
                     break
+
+            #  paused
             if fail_cnt >= self.scheduler.FAIL_PAUSE_NUM:
                 self._paused = True
                 self._paused_time = time.time()
