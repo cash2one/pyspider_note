@@ -152,6 +152,7 @@ def cli(ctx, **kwargs):
     elif kwargs.get('beanstalk'):
         kwargs['message_queue'] = "beanstalk://%s/" % kwargs['beanstalk']
 
+    # 新建消息队列
     for name in ('newtask_queue', 'status_queue', 'scheduler2fetcher',
                  'fetcher2processor', 'processor2result'):
         if kwargs.get('message_queue'):

@@ -16,8 +16,10 @@ class RedisQueue(object):
     A Queue like message built over redis
     """
 
+    # Exception raised when non-blocking get() (or get_nowait()) is called on a Queue object which is empty.
     Empty = BaseQueue.Empty
     Full = BaseQueue.Full
+
     max_timeout = 0.3
 
     def __init__(self, name, host='localhost', port=6379, db=0,
@@ -57,6 +59,7 @@ class RedisQueue(object):
             pass
         elif self.full():
             raise self.Full
+        # umsgpack用于序列化数据
         self.last_qsize = self.redis.rpush(self.name, umsgpack.packb(obj))
         return True
 

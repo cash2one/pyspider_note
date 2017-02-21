@@ -44,8 +44,11 @@ def connect_message_queue(name, url=None, maxsize=0, lazy_limit=True):
         from .beanstalk import Queue
         return Queue(name, host=parsed.netloc, maxsize=maxsize)
     elif parsed.scheme == 'redis':
+        # redis://root:password@127.0.0.1:6379/db
         from .redis_queue import Queue
         db = parsed.path.lstrip('/').split('/')
+
+        # 为什么将db转为int?
         try:
             db = int(db[0])
         except:
@@ -53,6 +56,7 @@ def connect_message_queue(name, url=None, maxsize=0, lazy_limit=True):
 
         password = parsed.password or None
 
+        # name means scheduler_to_fetch ect..
         return Queue(name, parsed.hostname, parsed.port, db=db, maxsize=maxsize, password=password, lazy_limit=lazy_limit)
     else:
         if url.startswith('kombu+'):
