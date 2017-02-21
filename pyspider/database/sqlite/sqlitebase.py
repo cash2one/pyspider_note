@@ -15,17 +15,23 @@ class SQLiteMixin(object):
 
     @property
     def dbcur(self):
+        # 进程pid，线程ident（进程，线程的标识符）
         pid = (os.getpid(), threading.current_thread().ident)
+        # 如果已经有self.conn并且pid相等
         if not (self.conn and pid == self.last_pid):
+            # self.last_pid为当前的pid
             self.last_pid = pid
+            # 创建连接
             self.conn = sqlite3.connect(self.path, isolation_level=None)
         return self.conn.cursor()
 
 
 class SplitTableMixin(object):
+    # 更新project的时间间隔
     UPDATE_PROJECTS_TIME = 10 * 60
 
     def _tablename(self, project):
+        """返回tablename"""
         if self.__tablename__:
             return '%s_%s' % (self.__tablename__, project)
         else:
@@ -33,6 +39,7 @@ class SplitTableMixin(object):
 
     @property
     def projects(self):
+        """返回project(若时间差大于时间间隔，更新project)"""
         if time.time() - getattr(self, '_last_update_projects', 0) \
                 > self.UPDATE_PROJECTS_TIME:
             self._list_project()
@@ -52,8 +59,11 @@ class SplitTableMixin(object):
             prefix = ''
         for project, in self._select('sqlite_master', what='name',
                                      where='type = "table"'):
+            # 从DB中读取所有table
             if project.startswith(prefix):
+                # 如果是以"projectdb"/"resultdb"/"taskdb"为前缀
                 project = project[len(prefix):]
+                # 将peoject名添加入self.projects
                 self.projects.add(project)
 
     def drop(self, project):

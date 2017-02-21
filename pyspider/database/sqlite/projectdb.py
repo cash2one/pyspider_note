@@ -28,12 +28,14 @@ class ProjectDB(SQLiteMixin, BaseProjectDB, BaseDB):
                 )''' % self.__tablename__)
 
     def insert(self, name, obj={}):
+        """插入一个project"""
         obj = dict(obj)
         obj['name'] = name
         obj['updatetime'] = time.time()
         return self._insert(**obj)
 
     def update(self, name, obj={}, **kwargs):
+        """更新一个project"""
         obj = dict(obj)
         obj.update(kwargs)
         obj['updatetime'] = time.time()
@@ -50,6 +52,7 @@ class ProjectDB(SQLiteMixin, BaseProjectDB, BaseDB):
         return None
 
     def check_update(self, timestamp, fields=None):
+        """SELECT所有updatetime大于timestamp的project"""
         where = "`updatetime` >= %f" % timestamp
         return self._select2dic(what=fields, where=where)
 

@@ -26,7 +26,9 @@ class TaskDB(SQLiteMixin, SplitTableMixin, BaseTaskDB, BaseDB):
 
     def _create_project(self, project):
         assert re.match(r'^\w+$', project) is not None
+        # create a table name
         tablename = self._tablename(project)
+        # 建表
         self._execute('''CREATE TABLE IF NOT EXISTS `%s` (
                 taskid PRIMARY KEY,
                 project,
@@ -34,12 +36,14 @@ class TaskDB(SQLiteMixin, SplitTableMixin, BaseTaskDB, BaseDB):
                 schedule, fetch, process, track,
                 lastcrawltime, updatetime
                 )''' % tablename)
+        # 建索引
         self._execute(
             '''CREATE INDEX `status_%s_index` ON %s (status)'''
             % (tablename, self.escape(tablename))
         )
 
     def _parse(self, data):
+        # 把'schedule', 'fetch', 'process', 'track'这些dict-obj loads出来
         for each in ('schedule', 'fetch', 'process', 'track'):
             if each in data:
                 if data[each]:
@@ -49,6 +53,7 @@ class TaskDB(SQLiteMixin, SplitTableMixin, BaseTaskDB, BaseDB):
         return data
 
     def _stringify(self, data):
+        # 把'schedule', 'fetch', 'process', 'track'这些dict-obj dumps出来
         for each in ('schedule', 'fetch', 'process', 'track'):
             if each in data:
                 data[each] = json.dumps(data[each])
