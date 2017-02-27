@@ -4,7 +4,13 @@
 # Author: Binux<i@binux.me>
 #         http://binux.me
 # Created on 2012-12-17 11:07:19
+"""
+Fetcher:
+    fetch(self, task, callback=None)->self.async_fetch(task, callback)->(yield)self.http_fetch(url, task)->
 
+
+
+"""
 from __future__ import unicode_literals
 
 import os
@@ -80,15 +86,23 @@ class Fetcher(object):
     robot_txt_age = 60 * 60  # 1h
 
     def __init__(self, inqueue, outqueue, poolsize=100, proxy=None, async=True):
-        self.inqueue = inqueue  # 入队列
-        self.outqueue = outqueue  # 出队列
+        """
+        绑定IOLoop，设置初始属性
+        :param inqueue:         入队列
+        :param outqueue:        出队列
+        :param poolsize:        并发数
+        :param proxy:
+        :param async:           异步
+        """
+        self.inqueue = inqueue
+        self.outqueue = outqueue
 
-        self.poolsize = poolsize  # 并发数
+        self.poolsize = poolsize
         self._running = False
         self._quit = False
         self.proxy = proxy
-        self.async = async  # 异步
-        self.ioloop = tornado.ioloop.IOLoop()  # IOLoop
+        self.async = async
+        self.ioloop = tornado.ioloop.IOLoop()
 
         self.robots_txt_cache = {}
 
@@ -109,7 +123,7 @@ class Fetcher(object):
         }
 
     def send_result(self, type, task, result):
-        '''Send fetch result to processor'''
+        '''发送fetch的task到process的队列里'''
         """发送task到self.outqueue"""
         if self.outqueue:
             try:
@@ -126,6 +140,9 @@ class Fetcher(object):
     @gen.coroutine
     def async_fetch(self, task, callback=None):
         """
+        yield self.http_fetch(url, task)
+        执行callback
+        执行self.on_result
 
         :param task:
         :param callback:
@@ -341,7 +358,18 @@ class Fetcher(object):
 
     @gen.coroutine
     def http_fetch(self, url, task):
-        '''HTTP fetcher'''
+        '''
+        hook self.on_fetch('http', task)->
+        将task解包成tornado认识的形式->
+        新的一个cookiejar,应用requests库里面的cookies管理->
+        处理header关于cookies的部分->
+        正式开始请求->
+        创建tornado的request request = tornado.httpclient.HTTPRequest(**fetch)->
+        yield这个request response = yield gen.maybe_future(self.http_client.fetch(request))->
+
+
+        HTTP fetcher
+        '''
         start_time = time.time()
         # 在fetch之前调用
         self.on_fetch('http', task)

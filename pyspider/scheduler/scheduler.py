@@ -106,6 +106,7 @@ class Project(object):
         return self._paused is True
 
     def update(self, project_info):
+        """更新脚本后，checking"""
         self.project_info = project_info
 
         self.name = project_info['name']
@@ -172,6 +173,7 @@ class Scheduler(object):
 
     def __init__(self, taskdb, projectdb, newtask_queue, status_queue,
                  out_queue, data_path='./data', resultdb=None):
+        # 调度器所需的数据库以及队列
         self.taskdb = taskdb
         self.projectdb = projectdb
         self.resultdb = resultdb
@@ -182,6 +184,7 @@ class Scheduler(object):
 
         self._send_buffer = deque()
         self._quit = False
+        # 调度器loop的时候出现的错误的额统计
         self._exceptions = 0
         self.projects = dict()
         self._force_update_project = False
@@ -189,6 +192,7 @@ class Scheduler(object):
         self._last_tick = int(time.time())
         self._postpone_request = []
 
+        # 数量统计
         self._cnt = {
             "5m_time": counter.CounterManager(
                 lambda: counter.TimebaseAverageEventCounter(30, 10)),
@@ -201,13 +205,18 @@ class Scheduler(object):
             "all": counter.CounterManager(
                 lambda: counter.TotalCounter()),
         }
+
+        # 读取上一次保存的
         self._cnt['1h'].load(os.path.join(self.data_path, 'scheduler.1h'))
         self._cnt['1d'].load(os.path.join(self.data_path, 'scheduler.1d'))
         self._cnt['all'].load(os.path.join(self.data_path, 'scheduler.all'))
         self._last_dump_cnt = 0
 
     def _update_projects(self):
-        '''Check project update'''
+        '''
+        检查project
+        Check project update
+        '''
         now = time.time()
         if (
                 not self._force_update_project
@@ -265,6 +274,7 @@ class Scheduler(object):
 
     def _load_tasks(self, project):
         '''load tasks from database'''
+        # 从db读取task－＞进入task_queue队列－＞设置计数器
         task_queue = project.task_queue
 
         for task in self.taskdb.load_tasks(
@@ -283,6 +293,7 @@ class Scheduler(object):
         self._cnt['all'].value((project.name, 'pending'), len(project.task_queue))
 
     def _update_project_cnt(self, project_name):
+        """更新计数器"""
         status_count = self.taskdb.status_count(project_name)
         self._cnt['all'].value(
             (project_name, 'success'),
@@ -336,6 +347,7 @@ class Scheduler(object):
 
     def send_task(self, task, force=True):
         '''
+        将task发送到fetch队列
         dispatch task to fetcher
 
         out queue may have size limit to prevent block, a send_buffer is used
@@ -349,12 +361,18 @@ class Scheduler(object):
                 raise
 
     def _check_task_done(self):
-        '''Check status queue'''
+        '''
+        从status_queue拿出task－＞处理_on_get_info情况－＞verify task－＞on_task_status(task)
+
+        Check status queue
+        '''
         cnt = 0
         try:
             while True:
                 task = self.status_queue.get_nowait()
                 # check _on_get_info result here
+                # update project runtime info from processor by sending a _on_get_info
+                # request, result is in status_page.track.save
                 if task.get('taskid') == '_on_get_info' and 'project' in task and 'track' in task:
                     if task['project'] not in self.projects:
                         continue
@@ -375,7 +393,11 @@ class Scheduler(object):
     merge_task_fields = ['taskid', 'project', 'url', 'status', 'schedule', 'lastcrawltime']
 
     def _check_request(self):
-        '''Check new task queue'''
+        '''
+        从newtask_queue拿出task－＞verify task－＞on_request(task)
+
+        Check new task queue
+        '''
         # check _postpone_request first
         todo = []
         for task in self._postpone_request:
@@ -403,6 +425,7 @@ class Scheduler(object):
                 if not self.task_verify(task):
                     continue
 
+                # force_update 替换掉相同taskid的task
                 if task['taskid'] in self.projects[task['project']].task_queue:
                     if not task.get('schedule', {}).get('force_update', False):
                         logger.debug('ignore newtask %(project)s:%(taskid)s %(url)s', task)
@@ -420,7 +443,10 @@ class Scheduler(object):
         return len(tasks)
 
     def _check_cronjob(self):
-        """Check projects cronjob tick, return True when a new tick is sended"""
+        # TODO
+        """
+        Check projects cronjob tick, return True when a new tick is sended
+        """
         now = time.time()
         self._last_tick = int(self._last_tick)
         if now - self._last_tick < 1:
@@ -434,6 +460,7 @@ class Scheduler(object):
             if project.min_tick == 0:
                 continue
             if self._last_tick % int(project.min_tick) != 0:
+                # 整数
                 continue
             self.on_select_task({
                 'taskid': '_on_cronjob',
@@ -464,7 +491,11 @@ class Scheduler(object):
     ]
 
     def _check_select(self):
-        '''Select task to fetch & process'''
+        '''
+        从self._send_buffer中取出task放入out_queue中
+
+        Select task to fetch & process
+        '''
         while self._send_buffer:
             _task = self._send_buffer.pop()
             try:
@@ -635,7 +666,12 @@ class Scheduler(object):
             self.xmlrpc_ioloop.add_callback(self.xmlrpc_ioloop.stop)
 
     def run_once(self):
-        '''comsume queues and feed tasks to fetcher, once'''
+        '''
+        更新project
+        从status_queue拿出task
+        从newtask_queue
+        comsume queues and feed tasks to fetcher, once
+        '''
 
         self._update_projects()
         self._check_task_done()
@@ -863,9 +899,13 @@ class Scheduler(object):
         return task
 
     def on_task_status(self, task):
-        '''Called when a status pack is arrived'''
+        '''
+
+        Called when a status pack is arrived
+        '''
         try:
             procesok = task['track']['process']['ok']
+            # 如果task未完成
             if not self.projects[task['project']].task_queue.done(task['taskid']):
                 logging.error('not processing pack: %(project)s:%(taskid)s %(url)s', task)
                 return None
@@ -873,6 +913,7 @@ class Scheduler(object):
             logger.error("Bad status pack: %s", e)
             return None
 
+        # task成功与失败
         if procesok:
             ret = self.on_task_done(task)
         else:
@@ -888,7 +929,11 @@ class Scheduler(object):
         return ret
 
     def on_task_done(self, task):
-        '''Called when a task is done and success, called by `on_task_status`'''
+        '''
+        task成功时调用
+        设置状态－＞设置时间－＞如果`auto_recrawl`，重新放回队列；否则del task['schedule'] 存入taskdb－＞更新计数器－＞返回task
+        Called when a task is done and success, called by `on_task_status`
+        '''
         task['status'] = self.taskdb.SUCCESS
         task['lastcrawltime'] = time.time()
 
@@ -911,9 +956,14 @@ class Scheduler(object):
         return task
 
     def on_task_failed(self, task):
-        '''Called when a task is failed, called by `on_task_status`'''
+        '''
+        task失败的时候调用
+        获取task的各种参数准备重试－＞更新计数器－＞存入taskdb－＞重新放入队列
+        Called when a task is failed, called by `on_task_status`
+        '''
 
         if 'schedule' not in task:
+            # old_task_schedule
             old_task = self.taskdb.get_task(task['project'], task['taskid'], fields=['schedule'])
             if old_task is None:
                 logging.error('unknown status pack: %s' % task)
@@ -964,7 +1014,11 @@ class Scheduler(object):
             return task
 
     def on_select_task(self, task):
-        '''Called when a task is selected to fetch & process'''
+        '''
+        当task被调度器选择准备fetch之后调用
+        写入各种参数－＞task变成active的，并且append到active_tasks－＞将task发送到fetch队列－＞返回task
+        Called when a task is selected to fetch & process
+        '''
         # inject informations about project
         logger.info('select %(project)s:%(taskid)s %(url)s', task)
 
